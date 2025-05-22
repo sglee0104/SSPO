@@ -6,10 +6,8 @@ This repository contains the implementation of SSPO and related methods (DPO, OR
 
 1. Create a virtual environment named 'sspo' with Python 3.10 or higher:
 ```bash
-python -m venv sspo
-source sspo/bin/activate  # For Linux/Mac
-# or
-.\sspo\Scripts\activate  # For Windows
+conda create -n sspo python==3.10.0
+conda activate sspo
 ```
 
 2. Install required packages:
@@ -41,10 +39,7 @@ bash examples/train/train.sh
 
 ### DPO, ORPO, SimPO Training
 
-Follow the same steps as SSPO, but modify the source path in the respective shell script:
-- For DPO: Modify `examples/train/train.sh`
-- For ORPO: Modify `examples/train/train.sh`
-- For SimPO: Modify `examples/train/train.sh`
+Follow the same steps as SSPO, but modify the method in `examples/train/train.sh`
 
 ### SSRM Training
 
