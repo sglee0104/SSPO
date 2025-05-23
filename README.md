@@ -1,6 +1,6 @@
 # SSPO (Semi-Supervised Preference Optimization)
 
-This repository contains the implementation of SSPO and related methods (DPO, ORPO, SimPO, SSRM).
+This repository contains the implementation of SSPO and baselines (DPO, ORPO, SimPO, SSRM).
 
 ## Installation
 
