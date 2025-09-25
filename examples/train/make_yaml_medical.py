@@ -1,5 +1,5 @@
 """
-Make yaml file for training DPO, ORPO, SimPO and SSPO.
+Make yaml file for training DPO, ORPO, SimPO, KTO and SSPO.
 
 base SFT model : 
 mistral : https://huggingface.co/dmis-lab/meerkat-7b-v1.0
@@ -23,7 +23,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--peft", type=str, default="lora", help="full or lora or q-lora")
-parser.add_argument("--method", type=str, default="sspo", help="sft, dpo, orpo, simpo, or sspo")
+parser.add_argument("--method", type=str, default="sspo", help="sft, dpo, orpo, simpo, kto, or sspo")
 parser.add_argument("--model_path", type=str, default="TsinghuaC3I/Llama-3-8B-UltraMedical", help="TsinghuaC3I/Llama-3-8B-UltraMedical or dmis-lab/meerkat-7b-v1.0")
 args = parser.parse_args()
 

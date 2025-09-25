@@ -1,5 +1,5 @@
 """
-Make yaml file for training DPO, ORPO, SimPO, KTOand SSPO.
+Make yaml file for training DPO, ORPO, SimPO, KTO and SSPO.
 
 base SFT model : 
 phi-2 : https://huggingface.co/lole25/phi-2-sft-ultrachat-full (set "trust_remote_code" to False in the yaml file.)
