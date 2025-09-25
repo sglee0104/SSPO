@@ -1,6 +1,6 @@
 # SSPO (Semi-Supervised Preference Optimization)
 
-This repository contains the implementation of SSPO and baselines (DPO, ORPO, SimPO, SSRM).
+This repository contains the implementation of SSPO and baselines (DPO, ORPO, SimPO, KTO, SSRM, SPA).
 
 ## Installation
 
@@ -23,11 +23,15 @@ pip install -r requirements.txt
 1. Preprocess the data:
 ```bash
 python preprocessing_data/preprocessing_ultrachat.py --fb [feedback_ratio] --ch [chat_ratio]
+python preprocessing_data/preprocessing_medical.py --fb [feedback_ratio] --ch [chat_ratio]
+python preprocessing_data/preprocessing_business.py --fb [feedback_ratio] --ch [chat_ratio]
 ```
 
 2. Generate YAML configuration and training command:
 ```bash
 python examples/train/make_yaml.py
+python examples/train/make_yaml_medical.py
+python examples/train/make_yaml_business.py
 ```
 
 3. Execute training:
@@ -37,9 +41,13 @@ python examples/train/make_yaml.py
 bash examples/train/train.sh
 ```
 
-### DPO, ORPO, SimPO Training
+### DPO, ORPO, SimPO, KTO Training
 
 Follow the same steps as SSPO, but modify the method in `examples/train/train.sh`
+
+### SPA Training
+
+We follow the implementation from the SPA repository. Please refer to this repository for detailed instructions: https://github.com/kingdy2002/SPA
 
 ### SSRM Training
 

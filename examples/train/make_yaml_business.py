@@ -1,10 +1,9 @@
 """
-Make yaml file for training DPO, ORPO, SimPO, KTOand SSPO.
+Make yaml file for training DPO, ORPO, SimPO and SSPO.
 
 base SFT model : 
-phi-2 : https://huggingface.co/lole25/phi-2-sft-ultrachat-full (set "trust_remote_code" to False in the yaml file.)
-mistral : https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2
-llama-3 : https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct
+mistral : https://huggingface.co/VijayRam1812/Mistral-7B-Business
+llama-3 : https://huggingface.co/tarun7r/Finance-Llama-8B 
 
 or, use any other SFT model.
 
@@ -24,8 +23,8 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--peft", type=str, default="lora", help="full or lora or q-lora")
-parser.add_argument("--method", type=str, default="sspo", help="sft, dpo, orpo, simpo, kto, or sspo")
-parser.add_argument("--model_path", type=str, default="meta-llama/Meta-Llama-3-8B-Instruct", help="meta-llama/Meta-Llama-3-8B-Instruct or lole25/phi-2-sft-ultrachat-full or mistralai/Mistral-7B-Instruct-v0.2")
+parser.add_argument("--method", type=str, default="sspo", help="sft, dpo, orpo, simpo, or sspo")
+parser.add_argument("--model_path", type=str, default="tarun7r/Finance-Llama-8B", help="tarun7r/Finance-Llama-8B or VijayRam1812/Mistral-7B-Business")
 args = parser.parse_args()
 
 peft = args.peft
@@ -45,12 +44,10 @@ else:
 # Determine cache directory based on model_path
 def get_cache_dir(model_path):
     model_name = model_path.lower()
-    if "phi" in model_name:
-        return "./cache/phi-2"
-    elif "llama" in model_name and "3" in model_name:
-        return "./cache/llama3-8b-it"
+    if "llama" in model_name:
+        return "./cache/llama3-8b-it-business"
     elif "mistral" in model_name:
-        return "./cache/mistral-7b-it"
+        return "./cache/mistral-7b-it-business"
     else:
         # Fallback to model name
         return f"./cache/{model_path.split('/')[-1]}"
@@ -65,18 +62,31 @@ def get_trust_remote_code(model_path):
 # Determine backbone name based on model_path
 def get_backbone_name(model_path):
     model_name = model_path.lower()
-    if "phi" in model_name:
-        return "phi-2"
-    elif "llama" in model_name and "3" in model_name:
-        return "llama3-8b-it"
+    if "llama" in model_name:
+        return "llama3-8b-it-business"
     elif "mistral" in model_name:
-        return "mistral-7b-it"
+        return "mistral-7b-it-business"
     else:
         # Fallback to original logic
         return model_path.split('/')[-1]
 
+# Determine model_name_or_path and adapter_name_or_path based on model_path
+def get_model_config(model_path):
+    if model_path == "VijayRam1812/Mistral-7B-Business":
+        return {
+            "model_name_or_path": "mistralai/Mistral-7B-Instruct-v0.1",
+            "adapter_name_or_path": "VijayRam1812/Mistral-7B-Business"
+        }
+    else:
+        return {
+            "model_name_or_path": model_path,
+            "adapter_name_or_path": None
+        }
+
+model_config = get_model_config(model_path)
+
 base_config = {
-    "model_name_or_path": model_path,
+    "model_name_or_path": model_config["model_name_or_path"],
     "trust_remote_code": get_trust_remote_code(model_path),
     "stage": stage,
     "do_train": True,
@@ -103,17 +113,21 @@ base_config = {
     "cache_dir": get_cache_dir(model_path),
 }
 
+# Add adapter_name_or_path if it exists
+if model_config["adapter_name_or_path"]:
+    base_config["adapter_name_or_path"] = model_config["adapter_name_or_path"]
+
 # hyperparameters
-datasets = ["ultra_combined_fb0.1_ch0.1"]
+datasets = ["business_fb0.1_ch1.0"]
 fb_ratio = 0.1
-ch_ratio = 0.1
-learning_rates = [1e-5]
-num_train_epochs = [2]
+ch_ratio = 1.0
+learning_rates = [5e-5]
+num_train_epochs = [1]
 lora_ranks = [8]
 
-sspo_gamma_decays = [0.001] #, 0.05, 0.005, 0.001]
-sspo_priors = [0.5]
-sspo_gamma_mins = [round(6113/(6113+20785), 4)] # n_L / (n_L + n_U) # 6113, 20785
+sspo_gamma_decays = [0.001]
+sspo_priors = [0.1, 0.3, 0.7, 0.9]
+sspo_gamma_mins = [round(5021/(5021+17480), 4)] # n_L / (n_L + n_U) # 5021, 17480
 sspo_gamma_0s = [1.0]
 sspo_bases = ["simpo"]  # Add sspo_base options
 

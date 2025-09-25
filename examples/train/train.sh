@@ -39,4 +39,4 @@ export WANDB_API_KEY="YOUR_WANDB_API_KEY"
 
 # llamafactory-cli train "YOUR_YAML_FILE_PATH"
 
-llamafactory-cli train ./examples/train/sspo_llama3/sweep_yamls/sspo_Llama-3-Base-8B-SFT/fb0.1_ch0.1/fb0.1_ch0.1_lora_Llama-3-Base-8B-SFT_sspo_lr1e-06_rank8_beta2.0_margins0.5_prior0.8_gamma_decay0.001_gamma_init1.0_gamma_min0.2273_cutoff1024_ep10_tb16_eb16_ga1.yaml
+llamafactory-cli train YOUR_YAML_FILE_PATH
