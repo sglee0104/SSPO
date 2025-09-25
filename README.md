@@ -47,7 +47,7 @@ Follow the same steps as SSPO, but modify the method in `examples/train/train.sh
 
 ### SPA Training
 
-We follow the implementation from the SPA repository. Please refer to this repository for detailed instructions: https://github.com/kingdy2002/SPA
+We follow the implementation from the [SPA repository](https://github.com/kingdy2002/SPA). Please refer to this repository for detailed instructions.
 
 ### SSRM Training
 
