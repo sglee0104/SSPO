@@ -177,6 +177,37 @@ class CustomDPOTrainer(DPOTrainer):
         orpo_loss = sft_loss + self.beta * odds_ratio_loss
         return orpo_loss
 
+    def dpo_loss(  # type: ignore[override]
+        self,
+        policy_chosen_logps: "torch.Tensor",
+        policy_rejected_logps: "torch.Tensor",
+        reference_chosen_logps: "torch.Tensor",
+        reference_rejected_logps: "torch.Tensor",
+    ) -> Tuple["torch.Tensor", "torch.Tensor", "torch.Tensor"]:
+        """
+        Override TRL's DPO loss to support custom loss types such as `dpo_sft`.
+
+        For `dpo_sft`, we reuse the standard sigmoid DPO loss under the hood.
+        """
+        original_loss_type = self.loss_type
+
+        # Map extended loss types to a valid base loss type for TRL's DPO implementation.
+        if self.loss_type == "dpo_sft":
+            self.loss_type = "sigmoid"
+
+        try:
+            losses, chosen_rewards, rejected_rewards = super().dpo_loss(
+                policy_chosen_logps,
+                policy_rejected_logps,
+                reference_chosen_logps,
+                reference_rejected_logps,
+            )
+        finally:
+            # Always restore original loss_type
+            self.loss_type = original_loss_type
+
+        return losses, chosen_rewards, rejected_rewards
+
     def simpo_loss(self, chosen_logps: "torch.Tensor", rejected_logps: "torch.Tensor") -> "torch.Tensor":
         r"""
         Computes SimPO loss for batched log probabilities of the policy model.
@@ -561,6 +592,9 @@ class CustomDPOTrainer(DPOTrainer):
             if self.ftx_gamma > 1e-6:
                 losses = losses + self.ftx_gamma * sft_loss
 
+            # Ensure scalar loss for backward()
+            loss = losses.mean() if losses.dim() > 0 else losses
+
             metrics[f"{prefix}rewards/chosen"] = chosen_rewards.mean().item() if chosen_rewards.numel() > 0 else 0.0
             metrics[f"{prefix}rewards/rejected"] = rejected_rewards.mean().item() if rejected_rewards.numel() > 0 else 0.0
             metrics[f"{prefix}rewards/unlabeled"] = unlabeled_rewards.mean().item() if unlabeled_rewards.numel() > 0 else 0.0
@@ -587,7 +621,7 @@ class CustomDPOTrainer(DPOTrainer):
                 metrics[f"{prefix}dpo/reference_chosen_logps"] = reference_chosen_logps.mean().item() if reference_chosen_logps is not None and reference_chosen_logps.numel() > 0 else 0.0
                 metrics[f"{prefix}dpo/reference_rejected_logps"] = reference_rejected_logps.mean().item() if reference_rejected_logps is not None and reference_rejected_logps.numel() > 0 else 0.0
 
-            return losses, metrics
+            return loss, metrics
         elif self.loss_type in ["dpo_sft", "simpo_sft"]:
             # DPO+SFT or SimPO+SFT: use labeled pairwise + unpaired SFT
             (
@@ -660,7 +694,10 @@ class CustomDPOTrainer(DPOTrainer):
                 policy_unlabeled_logits.mean().item() if policy_unlabeled_logits.numel() > 0 else 0.0
             )
 
-            return losses, metrics
+            # Ensure scalar loss for backward()
+            loss = losses.mean() if losses.dim() > 0 else losses
+
+            return loss, metrics
 
         else:
             (
