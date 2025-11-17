@@ -24,7 +24,12 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--peft", type=str, default="lora", help="full or lora or q-lora")
-parser.add_argument("--method", type=str, default="sspo", help="sft, dpo, orpo, simpo, kto, or sspo")
+parser.add_argument(
+    "--method",
+    type=str,
+    default="sspo",
+    help="sft, dpo, orpo, simpo, dpo_sft, simpo_sft, kto, or sspo",
+)
 parser.add_argument("--model_path", type=str, default="mistralai/Mistral-7B-Instruct-v0.2", help="meta-llama/Meta-Llama-3-8B-Instruct or lole25/phi-2-sft-ultrachat-full or mistralai/Mistral-7B-Instruct-v0.2")
 args = parser.parse_args()
 
@@ -88,7 +93,7 @@ base_config = {
     "preprocessing_num_workers": 12,
     "max_grad_norm": 1.0,
     "logging_steps": 20, #5
-    "save_steps": 500, #30
+    "save_steps": 200, #30
     "plot_loss": True,
     "overwrite_output_dir": True,
     "per_device_train_batch_size": 1,
@@ -99,13 +104,13 @@ base_config = {
     "val_size": 0.1,
     "per_device_eval_batch_size": 1,
     "eval_strategy": "steps",
-    "eval_steps": 500, #10
+    "eval_steps": 200, #10
     "cache_dir": get_cache_dir(model_path),
 }
 
-# hyperparameters
-datasets = ["ultra_combined_fb1.0_ch0.1"]
-fb_ratio = 1.0
+# hyperparameters 
+datasets = ["ultra_combined_fb0.1_ch0.1"]
+fb_ratio = 0.1
 ch_ratio = 0.1
 learning_rates = [1e-5]
 num_train_epochs = [1]
@@ -113,7 +118,7 @@ lora_ranks = [8]
 
 sspo_gamma_decays = [0.001] #, 0.05, 0.005, 0.001]
 sspo_priors = [0.5]
-sspo_gamma_mins = [round(61135/(61135+20786), 4)] # n_L / (n_L + n_U) # 6113, 20785
+sspo_gamma_mins = [round(6113/(6113+20786), 4)] # n_L / (n_L + n_U) # 6113, 20786
 sspo_gamma_0s = [1.0]
 sspo_bases = ["simpo"]  # Add sspo_base options
 
