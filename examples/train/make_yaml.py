@@ -25,7 +25,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--peft", type=str, default="lora", help="full or lora or q-lora")
 parser.add_argument("--method", type=str, default="sspo", help="sft, dpo, orpo, simpo, kto, or sspo")
-parser.add_argument("--model_path", type=str, default="meta-llama/Meta-Llama-3-8B-Instruct", help="meta-llama/Meta-Llama-3-8B-Instruct or lole25/phi-2-sft-ultrachat-full or mistralai/Mistral-7B-Instruct-v0.2")
+parser.add_argument("--model_path", type=str, default="mistralai/Mistral-7B-Instruct-v0.2", help="meta-llama/Meta-Llama-3-8B-Instruct or lole25/phi-2-sft-ultrachat-full or mistralai/Mistral-7B-Instruct-v0.2")
 args = parser.parse_args()
 
 peft = args.peft
@@ -88,7 +88,7 @@ base_config = {
     "preprocessing_num_workers": 12,
     "max_grad_norm": 1.0,
     "logging_steps": 20, #5
-    "save_steps": 300, #30
+    "save_steps": 500, #30
     "plot_loss": True,
     "overwrite_output_dir": True,
     "per_device_train_batch_size": 1,
@@ -99,25 +99,25 @@ base_config = {
     "val_size": 0.1,
     "per_device_eval_batch_size": 1,
     "eval_strategy": "steps",
-    "eval_steps": 100, #10
+    "eval_steps": 500, #10
     "cache_dir": get_cache_dir(model_path),
 }
 
 # hyperparameters
-datasets = ["ultra_combined_fb0.1_ch0.1"]
-fb_ratio = 0.1
+datasets = ["ultra_combined_fb1.0_ch0.1"]
+fb_ratio = 1.0
 ch_ratio = 0.1
 learning_rates = [1e-5]
-num_train_epochs = [2]
+num_train_epochs = [1]
 lora_ranks = [8]
 
 sspo_gamma_decays = [0.001] #, 0.05, 0.005, 0.001]
 sspo_priors = [0.5]
-sspo_gamma_mins = [round(6113/(6113+20785), 4)] # n_L / (n_L + n_U) # 6113, 20785
+sspo_gamma_mins = [round(61135/(61135+20786), 4)] # n_L / (n_L + n_U) # 6113, 20785
 sspo_gamma_0s = [1.0]
 sspo_bases = ["simpo"]  # Add sspo_base options
 
-# gpu 2개 기준 -> train batch size 총 64
+
 per_device_train_batch_sizes = [4]
 per_device_eval_batch_sizes = [4]
 gradient_accumulation_steps = [8]
@@ -187,7 +187,7 @@ for (dataset, lr, tb, eb, ga, epochs, rank, sspo_gamma_decay, sspo_gamma_0, sspo
                 "sspo_prior": sspo_prior,
                 "simpo_gamma": simpo_gamma,
                 "sspo_base": sspo_base,
-                "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
+                # "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
             })
 
         filename = f"fb{fb_ratio}_ch{ch_ratio}_{peft}_{model_path.split('/')[-1]}_{method}_lr{lr}_rank{rank}_beta{beta}_margins{simpo_gamma}_prior{sspo_prior}_gamma_decay{sspo_gamma_decay}_gamma_init{sspo_gamma_0}_gamma_min{sspo_gamma_min}_base{sspo_base}_cutoff{cutoff_len}_ep{epochs}_tb{tb}_eb{eb}_ga{ga}.yaml"
@@ -228,7 +228,7 @@ for (dataset, lr, tb, eb, ga, epochs, rank, sspo_gamma_decay, sspo_gamma_0, sspo
                 "sspo_prior": sspo_prior,
                 "simpo_gamma": simpo_gamma,
                 "sspo_base": sspo_base,
-                "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
+                # "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
             })
 
         filename = f"fb{fb_ratio}_ch{ch_ratio}_{peft}_{model_path.split('/')[-1]}_{method}_lr{lr}_rank{rank}_beta{beta}_margins{simpo_gamma}_prior{sspo_prior}_gamma_decay{sspo_gamma_decay}_gamma_init{sspo_gamma_0}_gamma_min{sspo_gamma_min}_base{sspo_base}_cutoff{cutoff_len}_ep{epochs}_tb{tb}_eb{eb}_ga{ga}.yaml"
@@ -260,7 +260,7 @@ for (dataset, lr, tb, eb, ga, epochs, rank, sspo_gamma_decay, sspo_gamma_0, sspo
                 "sspo_prior": sspo_prior,
                 "simpo_gamma": simpo_gamma,
                 "sspo_base": sspo_base,
-                "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
+                # "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
             })
 
         filename = f"fb{fb_ratio}_ch{ch_ratio}_{peft}_{model_path.split('/')[-1]}_{method}_lr{lr}_beta{beta}_margins{simpo_gamma}_prior{sspo_prior}_gamma_decay{sspo_gamma_decay}_gamma_init{sspo_gamma_0}_gamma_min{sspo_gamma_min}_base{sspo_base}_cutoff{cutoff_len}_ep{epochs}_tb{tb}_eb{eb}_ga{ga}.yaml"

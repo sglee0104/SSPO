@@ -351,12 +351,19 @@ class CustomDPOTrainer(DPOTrainer):
             
         if self.finetuning_args.use_ref_model:
             batch = nested_detach(batch, clone=True)
-        
-        num_chosen = batch['num_chosen'].item() if 'num_chosen' in batch else 0
-        num_rejected = batch['num_rejected'].item() if 'num_rejected' in batch else 0
-        num_unlabeled = batch['num_unlabeled'].item() if 'num_unlabeled' in batch else 0
-        
-        all_logits: "torch.Tensor" = model(**batch, return_dict=True, use_cache=False).logits.to(torch.float32)
+
+        # Extract SSPO-specific metadata and remove them from model inputs
+        num_chosen = batch.get("num_chosen", torch.tensor([0])).item()
+        num_rejected = batch.get("num_rejected", torch.tensor([0])).item()
+        num_unlabeled = batch.get("num_unlabeled", torch.tensor([0])).item()
+
+        model_inputs = {
+            k: v
+            for k, v in batch.items()
+            if k not in ("num_chosen", "num_rejected", "num_unlabeled")
+        }
+
+        all_logits: "torch.Tensor" = model(**model_inputs, return_dict=True, use_cache=False).logits.to(torch.float32)
         all_logps, valid_length = get_batch_logps(logits=all_logits, labels=batch["labels"])
         
         if self.loss_type in ["ipo", "orpo", "simpo", "sspo"]:

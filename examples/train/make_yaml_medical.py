@@ -112,7 +112,7 @@ sspo_gamma_mins = [round(1093/(1093+20479), 4)] # n_L / (n_L + n_U) # 10935, 204
 sspo_gamma_0s = [1.0]
 sspo_bases = ["simpo"]  # Add sspo_base options
 
-# gpu 2개 기준 -> train batch size 총 64
+
 per_device_train_batch_sizes = [4]
 per_device_eval_batch_sizes = [4]
 gradient_accumulation_steps = [8]
@@ -182,7 +182,7 @@ for (dataset, lr, tb, eb, ga, epochs, rank, sspo_gamma_decay, sspo_gamma_0, sspo
                 "sspo_prior": sspo_prior,
                 "simpo_gamma": simpo_gamma,
                 "sspo_base": sspo_base,
-                "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
+                # "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
             })
 
         filename = f"fb{fb_ratio}_ch{ch_ratio}_{peft}_{model_path.split('/')[-1]}_{method}_lr{lr}_rank{rank}_beta{beta}_margins{simpo_gamma}_prior{sspo_prior}_gamma_decay{sspo_gamma_decay}_gamma_init{sspo_gamma_0}_gamma_min{sspo_gamma_min}_base{sspo_base}_cutoff{cutoff_len}_ep{epochs}_tb{tb}_eb{eb}_ga{ga}.yaml"
@@ -223,7 +223,7 @@ for (dataset, lr, tb, eb, ga, epochs, rank, sspo_gamma_decay, sspo_gamma_0, sspo
                 "sspo_prior": sspo_prior,
                 "simpo_gamma": simpo_gamma,
                 "sspo_base": sspo_base,
-                "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
+                # "sspo_min_labeled_per_batch": 2,  # Add minimum labeled data per batch
             })
 
         filename = f"fb{fb_ratio}_ch{ch_ratio}_{peft}_{model_path.split('/')[-1]}_{method}_lr{lr}_rank{rank}_beta{beta}_margins{simpo_gamma}_prior{sspo_prior}_gamma_decay{sspo_gamma_decay}_gamma_init{sspo_gamma_0}_gamma_min{sspo_gamma_min}_base{sspo_base}_cutoff{cutoff_len}_ep{epochs}_tb{tb}_eb{eb}_ga{ga}.yaml"
