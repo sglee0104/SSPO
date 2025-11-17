@@ -306,39 +306,117 @@ class CustomDPOTrainer(DPOTrainer):
         reference_chosen_logps: Optional["torch.Tensor"],
         reference_rejected_logps: Optional["torch.Tensor"],
         reference_unlabeled_logps: Optional["torch.Tensor"] = None,
-    ) -> Tuple["torch.Tensor", "torch.Tensor", "torch.Tensor"]:
+    ):
         """
         Computes loss for preference learning.
         """
         device = self.accelerator.device
-        
+
+        # SSPO: semi-supervised preference optimization with unlabeled loss
         if self.loss_type == "sspo":
             losses, simpo_losses, orpo_losses, unlabeled_losses = self.sspo_loss(
-                policy_chosen_logps, 
-                policy_rejected_logps, 
+                policy_chosen_logps,
+                policy_rejected_logps,
                 policy_unlabeled_logps,
                 reference_chosen_logps,
                 reference_rejected_logps,
-                reference_unlabeled_logps
+                reference_unlabeled_logps,
             )
             chosen_rewards = self.beta * policy_chosen_logps.to(device)
             rejected_rewards = self.beta * policy_rejected_logps.to(device)
             unlabeled_rewards = self.beta * policy_unlabeled_logps.to(device)
-            
-            return losses, simpo_losses, orpo_losses, unlabeled_losses, chosen_rewards, rejected_rewards, unlabeled_rewards
-        elif not self.finetuning_args.use_ref_model:
+
+            return (
+                losses,
+                simpo_losses,
+                orpo_losses,
+                unlabeled_losses,
+                chosen_rewards,
+                rejected_rewards,
+                unlabeled_rewards,
+            )
+
+        # DPO + SFT on unpaired data
+        if self.loss_type == "dpo_sft":
+            # DPO preference loss (requires reference model)
+            if reference_chosen_logps is None or reference_rejected_logps is None:
+                raise ValueError("`dpo_sft` requires a reference model, but reference log-probs are None.")
+
+            pref_losses, chosen_rewards, rejected_rewards = self.dpo_loss(
+                policy_chosen_logps,
+                policy_rejected_logps,
+                reference_chosen_logps,
+                reference_rejected_logps,
+            )
+
+            # SFT loss on unpaired (unlabeled) data: maximize log-prob
+            if policy_unlabeled_logps.numel() > 0:
+                sft_losses = -policy_unlabeled_logps
+                sft_loss = sft_losses.mean()
+                total_losses = pref_losses + self.ftx_gamma * sft_loss
+                unlabeled_rewards = self.beta * policy_unlabeled_logps.to(device)
+            else:
+                sft_losses = torch.tensor(0.0, device=device)
+                sft_loss = sft_losses
+                total_losses = pref_losses
+                unlabeled_rewards = torch.tensor([], device=device)
+
+            return (
+                total_losses,
+                pref_losses,
+                sft_losses,
+                chosen_rewards,
+                rejected_rewards,
+                unlabeled_rewards,
+            )
+
+        # SimPO + SFT on unpaired data (reference-free)
+        if self.loss_type == "simpo_sft":
+            pref_losses = self.simpo_loss(policy_chosen_logps, policy_rejected_logps)
+
+            if policy_unlabeled_logps.numel() > 0:
+                sft_losses = -policy_unlabeled_logps
+                sft_loss = sft_losses.mean()
+                total_losses = pref_losses + self.ftx_gamma * sft_loss
+                unlabeled_rewards = self.beta * policy_unlabeled_logps.to(device)
+            else:
+                sft_losses = torch.tensor(0.0, device=device)
+                sft_loss = sft_losses
+                total_losses = pref_losses
+                unlabeled_rewards = torch.tensor([], device=device)
+
+            chosen_rewards = self.beta * policy_chosen_logps.to(device)
+            rejected_rewards = self.beta * policy_rejected_logps.to(device)
+
+            return (
+                total_losses,
+                pref_losses,
+                sft_losses,
+                chosen_rewards,
+                rejected_rewards,
+                unlabeled_rewards,
+            )
+
+        # Original reference-free preference losses (ORPO / SimPO / etc.)
+        if not self.finetuning_args.use_ref_model:
             if self.loss_type == "orpo":
                 losses = self.odds_ratio_loss(policy_chosen_logps, policy_rejected_logps)
             elif self.loss_type == "simpo":
                 losses = self.simpo_loss(policy_chosen_logps, policy_rejected_logps)
             else:
-                return losses, self.beta * chosen_rewards, self.beta * rejected_rewards
-        else:
-            losses, chosen_rewards, rejected_rewards = self.dpo_loss(
-                policy_chosen_logps, policy_rejected_logps, reference_chosen_logps, reference_rejected_logps
-            )
-            
+                losses = self.simpo_loss(policy_chosen_logps, policy_rejected_logps)
+
+            chosen_rewards = self.beta * policy_chosen_logps.to(device)
+            rejected_rewards = self.beta * policy_rejected_logps.to(device)
+
             return losses, chosen_rewards, rejected_rewards
+
+        # Default: DPO with reference model
+        losses, chosen_rewards, rejected_rewards = self.dpo_loss(
+            policy_chosen_logps, policy_rejected_logps, reference_chosen_logps, reference_rejected_logps
+        )
+
+        return losses, chosen_rewards, rejected_rewards
 
 
     @override
@@ -366,7 +444,7 @@ class CustomDPOTrainer(DPOTrainer):
         all_logits: "torch.Tensor" = model(**model_inputs, return_dict=True, use_cache=False).logits.to(torch.float32)
         all_logps, valid_length = get_batch_logps(logits=all_logits, labels=batch["labels"])
         
-        if self.loss_type in ["ipo", "orpo", "simpo", "sspo"]:
+        if self.loss_type in ["ipo", "orpo", "simpo", "sspo", "dpo_sft", "simpo_sft"]:
             all_logps = all_logps / valid_length
         
         device = all_logps.device
@@ -386,13 +464,18 @@ class CustomDPOTrainer(DPOTrainer):
 
         chosen_length = length_list[0].to(device) if num_chosen > 0 else torch.tensor([], device=device)
 
-        if self.loss_type == "sspo":
+        if self.loss_type in ["sspo", "dpo_sft", "simpo_sft"]:
+            # For SSPO and *PO+SFT, expose unlabeled branches and length-normalized logps
             return (
-                chosen_logps, rejected_logps, unlabeled_logps,
-                chosen_logits, rejected_logits, unlabeled_logits,
+                chosen_logps,
+                rejected_logps,
+                unlabeled_logps,
+                chosen_logits,
+                rejected_logits,
+                unlabeled_logits,
                 chosen_logps / chosen_length if num_chosen > 0 else torch.tensor([], device=device),
                 rejected_logps / length_list[1].to(device) if num_rejected > 0 else torch.tensor([], device=device),
-                unlabeled_logps / length_list[2].to(device) if num_unlabeled > 0 else torch.tensor([], device=device)
+                unlabeled_logps / length_list[2].to(device) if num_unlabeled > 0 else torch.tensor([], device=device),
             )
         elif self.loss_type in ["ipo", "orpo", "simpo"]:
             return chosen_logps, rejected_logps, chosen_logits, rejected_logits, chosen_logps
@@ -505,6 +588,79 @@ class CustomDPOTrainer(DPOTrainer):
                 metrics[f"{prefix}dpo/reference_rejected_logps"] = reference_rejected_logps.mean().item() if reference_rejected_logps is not None and reference_rejected_logps.numel() > 0 else 0.0
 
             return losses, metrics
+        elif self.loss_type in ["dpo_sft", "simpo_sft"]:
+            # DPO+SFT or SimPO+SFT: use labeled pairwise + unpaired SFT
+            (
+                policy_chosen_logps,
+                policy_rejected_logps,
+                policy_unlabeled_logps,
+                policy_chosen_logits,
+                policy_rejected_logits,
+                policy_unlabeled_logits,
+                policy_chosen_logps_avg,
+                policy_rejected_logps_avg,
+                policy_unlabeled_logps_avg,
+            ) = self.concatenated_forward(model, batch)
+
+            reference_chosen_logps, reference_rejected_logps, _ = self.compute_reference_log_probs(model, batch)
+
+            (
+                losses,
+                pref_losses,
+                sft_losses,
+                chosen_rewards,
+                rejected_rewards,
+                unlabeled_rewards,
+            ) = self.compute_preference_loss(
+                policy_chosen_logps,
+                policy_rejected_logps,
+                policy_unlabeled_logps,
+                reference_chosen_logps,
+                reference_rejected_logps,
+            )
+
+            metrics[f"{prefix}loss/pref"] = pref_losses.mean().item() if pref_losses.numel() > 0 else 0.0
+            metrics[f"{prefix}loss/sft_unlabeled"] = sft_losses.mean().item() if sft_losses.numel() > 0 else 0.0
+
+            metrics[f"{prefix}rewards/chosen"] = chosen_rewards.mean().item() if chosen_rewards.numel() > 0 else 0.0
+            metrics[f"{prefix}rewards/rejected"] = (
+                rejected_rewards.mean().item() if rejected_rewards.numel() > 0 else 0.0
+            )
+            metrics[f"{prefix}rewards/unlabeled"] = (
+                unlabeled_rewards.mean().item() if unlabeled_rewards.numel() > 0 else 0.0
+            )
+            metrics[f"{prefix}rewards/accuracies"] = (
+                (chosen_rewards > rejected_rewards).float().mean().item()
+                if chosen_rewards.numel() > 0 and rejected_rewards.numel() > 0
+                else 0.5
+            )
+            metrics[f"{prefix}rewards/avg_margins"] = (
+                (chosen_rewards - rejected_rewards).mean().item()
+                if chosen_rewards.numel() > 0 and rejected_rewards.numel() > 0
+                else 0.0
+            )
+
+            metrics[f"{prefix}logps/chosen"] = (
+                policy_chosen_logps.mean().item() if policy_chosen_logps.numel() > 0 else 0.0
+            )
+            metrics[f"{prefix}logps/rejected"] = (
+                policy_rejected_logps.mean().item() if policy_rejected_logps.numel() > 0 else 0.0
+            )
+            metrics[f"{prefix}logps/unlabeled"] = (
+                policy_unlabeled_logps.mean().item() if policy_unlabeled_logps.numel() > 0 else 0.0
+            )
+
+            metrics[f"{prefix}logits/chosen"] = (
+                policy_chosen_logits.mean().item() if policy_chosen_logits.numel() > 0 else 0.0
+            )
+            metrics[f"{prefix}logits/rejected"] = (
+                policy_rejected_logits.mean().item() if policy_rejected_logits.numel() > 0 else 0.0
+            )
+            metrics[f"{prefix}logits/unlabeled"] = (
+                policy_unlabeled_logits.mean().item() if policy_unlabeled_logits.numel() > 0 else 0.0
+            )
+
+            return losses, metrics
 
         else:
             (
@@ -536,7 +692,9 @@ class CustomDPOTrainer(DPOTrainer):
             metrics[f"{prefix}logps/rejected"] = policy_rejected_logps.mean().item()
             metrics[f"{prefix}logits/chosen"] = policy_chosen_logits.mean().item()
             metrics[f"{prefix}logits/rejected"] = policy_rejected_logits.mean().item()
-            metrics[f"{prefix}logits/unlabeled"] = policy_unlabeled_logits.mean().item()
+            metrics[f"{prefix}logits/unlabeled"] = (
+                policy_unlabeled_logits.mean().item() if "policy_unlabeled_logits" in locals() else 0.0
+            )
             if self.loss_type == "orpo":
                 metrics[f"{prefix}sft_loss"] = sft_loss.mean().item()
                 metrics[f"{prefix}odds_ratio_loss"] = ((losses - sft_loss) / self.beta).mean().item()
