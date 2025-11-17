@@ -140,7 +140,17 @@ class RLHFArguments:
         default=0.0,
         metadata={"help": "The supervised fine-tuning loss coefficient in DPO training."},
     )
-    pref_loss: Literal["sigmoid", "hinge", "ipo", "kto_pair", "orpo", "simpo"] = field(
+    pref_loss: Literal[
+        "sigmoid",
+        "hinge",
+        "ipo",
+        "kto_pair",
+        "orpo",
+        "simpo",
+        "sspo",
+        "dpo_sft",
+        "simpo_sft",
+    ] = field(
         default="sigmoid",
         metadata={"help": "The type of DPO loss to use."},
     )
@@ -499,16 +509,25 @@ class FinetuningArguments(
         self.freeze_vision_tower = self.freeze_vision_tower or self.train_mm_proj_only
         self.freeze_multi_modal_projector = self.freeze_multi_modal_projector and not self.train_mm_proj_only
         
-        if self.stage == "dpo" and self.pref_loss != "sspo":
-            if self.pref_loss == "sigmoid":
-                self.use_ref_model = True
+        if self.stage == "dpo":
+            # SSPO and SFT-augmented losses can decide reference usage by their own base
+            if self.pref_loss in ["sspo", "dpo_sft", "simpo_sft"]:
+                if self.pref_loss == "sspo":
+                    # SSPO can be based on DPO (with ref) or SimPO (reference-free)
+                    self.use_ref_model = self.sspo_base == "dpo"
+                elif self.pref_loss == "dpo_sft":
+                    self.use_ref_model = True
+                elif self.pref_loss == "simpo_sft":
+                    self.use_ref_model = False
             else:
-                self.use_ref_model = False
+                # Original DPO-style behavior
+                if self.pref_loss == "sigmoid":
+                    self.use_ref_model = True
+                else:
+                    self.use_ref_model = False
         else:
-            if self.sspo_base == "dpo":
-                self.use_ref_model = True
-            else:
-                self.use_ref_model = False
+            # Non-DPO stages do not use reference model by default
+            self.use_ref_model = False
 
         assert self.finetuning_type in ["lora", "freeze", "full"], "Invalid fine-tuning method."
         assert self.ref_model_quantization_bit in [None, 8, 4], "We only accept 4-bit or 8-bit quantization."

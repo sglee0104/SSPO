@@ -112,7 +112,7 @@ base_config = {
 datasets = ["ultra_combined_fb0.1_ch0.1"]
 fb_ratio = 0.1
 ch_ratio = 0.1
-learning_rates = [1e-5]
+learning_rates = [1e-5, 5e-5, 1e-6, 5e-6]
 num_train_epochs = [1]
 lora_ranks = [8]
 
@@ -126,7 +126,7 @@ sspo_bases = ["simpo"]  # Add sspo_base options
 per_device_train_batch_sizes = [4]
 per_device_eval_batch_sizes = [4]
 gradient_accumulation_steps = [8]
-pref_betas = [10.0]
+pref_betas = [0.1]
 cutoff_lens = [1024]
 simpo_gammas = [2.0]
 
