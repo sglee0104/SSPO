@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import random
+import subprocess
 from typing import List, Optional
 import numpy as np
 import torch
@@ -42,11 +43,18 @@ args = argparse.ArgumentParser()
 args.add_argument("--train_num_ratio", type=float, default=1, help="The ratio of the training dataset to the original dataset. max is 1.")
 args.add_argument("--fb", type=float, default=0.1, help="The ratio of remaining the training dataset to the original feedback dataset. max is 1.")
 args.add_argument("--ch", type=float, default=0.1, help="The ratio of remaining the training dataset to the original unpaired (SFT) dataset. max is 1.")
+args.add_argument(
+    "--dsp_dir",
+    type=str,
+    default="./DSP",
+    help="Local directory to clone/use the DSP repository (https://github.com/Linear95/DSP).",
+)
 args = args.parse_args()
 
 train_num_ratio = args.train_num_ratio
 ultrafeedback_keep_ratio = args.fb
 business_book_keep_ratio = args.ch
+user_dsp_dir = args.dsp_dir
 
 #@Alignment Handbook utils
 DEFAULT_CHAT_TEMPLATE = "{% for message in messages %}\n{% if message['role'] == 'user' %}\n{{ '<|user|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'system' %}\n{{ '<|system|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'assistant' %}\n{{ '<|assistant|>\n'  + message['content'] + eos_token }}\n{% endif %}\n{% if loop.last and add_generation_prompt %}\n{{ '<|assistant|>' }}\n{% endif %}\n{% endfor %}"
@@ -289,17 +297,108 @@ def convert_to_json_format(dataset):
 
 ######## load dataset and preprocess #########
 
-# Load business dataset based on fb ratio
-if ultrafeedback_keep_ratio == 0.1:
-    raw_ultrafeedback_path = "./data/dsp_business_0.1.json"
-elif ultrafeedback_keep_ratio == 0.01:
-    raw_ultrafeedback_path = "./data/dsp_business_0.01.json"
-else:
-    raise ValueError(f"Unsupported ultrafeedback_keep_ratio: {ultrafeedback_keep_ratio}. Only 0.1 or 0.01 are supported.")
+DSP_REPO_URL = "https://github.com/Linear95/DSP.git"
 
-# Load business dataset from local JSON file
-with open(raw_ultrafeedback_path, 'r', encoding='utf-8') as f:
-    raw_ultrafeedback_data = json.load(f)
+
+def ensure_dsp_repo(dsp_dir: str):
+    """
+    Clone the DSP repository if it does not exist locally.
+    """
+    if os.path.isdir(dsp_dir) and os.path.isdir(os.path.join(dsp_dir, ".git")):
+        logger.info(f"DSP repository already exists at '{dsp_dir}'.")
+        return
+
+    if os.path.exists(dsp_dir) and not os.listdir(dsp_dir):
+        # Empty directory, safe to use
+        logger.info(f"DSP directory '{dsp_dir}' exists but is empty. Cloning into it.")
+        clone_target = dsp_dir
+    elif not os.path.exists(dsp_dir):
+        logger.info(f"DSP directory '{dsp_dir}' does not exist. Cloning repository.")
+        clone_target = dsp_dir
+    else:
+        # Non-empty directory without .git: ask user to clean up / choose another path
+        raise RuntimeError(
+            f"DSP directory '{dsp_dir}' exists and is not a git repo. "
+            f"Please specify an empty / non-existing directory for --dsp_dir."
+        )
+
+    try:
+        subprocess.run(
+            ["git", "clone", DSP_REPO_URL, clone_target],
+            check=True,
+        )
+        logger.info(f"Cloned DSP repository into '{clone_target}'.")
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to clone DSP repository: {e}")
+
+
+def load_dsp_business_from_domain_specific(dsp_dir: str, keep_ratio: float):
+    """
+    Load DSP Business data from the domain_specific_preference file and
+    convert it into a list of dicts with keys: instruction, chosen, rejected.
+
+    We treat the business response as the preferred (chosen) one and the
+    'normal' response as the less preferred (rejected) one.
+    """
+    if not (0.0 < keep_ratio <= 1.0):
+        raise ValueError(f"keep_ratio must be in (0, 1], got {keep_ratio}")
+
+    dsp_train_path = os.path.join(dsp_dir, "data", "domain_specific_preference.train.json")
+    if not os.path.exists(dsp_train_path):
+        raise FileNotFoundError(
+            f"Could not find '{dsp_train_path}'. "
+            f"Please make sure the DSP repo structure matches the official one."
+        )
+
+    logger.info(f"Loading DSP domain-specific preference train data from '{dsp_train_path}'.")
+    with open(dsp_train_path, "r", encoding="utf-8") as f:
+        raw_data = json.load(f)
+
+    total_samples = len(raw_data)
+    num_samples_to_keep = int(total_samples * keep_ratio)
+    if num_samples_to_keep <= 0:
+        raise ValueError(
+            f"keep_ratio {keep_ratio} is too small for dataset of size {total_samples}."
+        )
+
+    indices_to_keep = (
+        list(range(total_samples))
+        if keep_ratio >= 1.0
+        else random.sample(range(total_samples), num_samples_to_keep)
+    )
+
+    formatted_data = []
+    for idx in tqdm(indices_to_keep, desc="Processing DSP Business data"):
+        example = raw_data[idx]
+        query = example.get("query", "")
+        responses = example.get("responses", {})
+        business_resp = responses.get("business", "")
+        normal_resp = responses.get("normal", "")
+
+        if not query or not business_resp:
+            # Skip malformed entries
+            continue
+
+        formatted_example = {
+            "instruction": query,
+            "chosen": business_resp,
+            "rejected": normal_resp,
+        }
+        formatted_data.append(formatted_example)
+
+    logger.info(
+        f"Loaded and formatted {len(formatted_data)} DSP Business samples "
+        f"(requested ratio={keep_ratio}, original={total_samples})."
+    )
+    return formatted_data
+
+
+# Ensure DSP repo is available and load DSP Business data instead of a pre-saved JSON
+ensure_dsp_repo(user_dsp_dir)
+raw_ultrafeedback_data = load_dsp_business_from_domain_specific(
+    dsp_dir=user_dsp_dir,
+    keep_ratio=ultrafeedback_keep_ratio,
+)
 
 # Load business book dataset
 business_book_data = load_dataset("theoldmandthesea/17k_business_book", split=["train"])
