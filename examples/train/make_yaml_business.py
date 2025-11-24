@@ -126,12 +126,12 @@ if model_config["adapter_name_or_path"]:
 datasets = ["business_fb0.1_ch1.0"]
 fb_ratio = 0.1
 ch_ratio = 1.0
-learning_rates = [5e-5]
+learning_rates = [1e-5, 5e-5, 1e-6, 5e-6]
 num_train_epochs = [1]
 lora_ranks = [8]
 
 sspo_gamma_decays = [0.001]
-sspo_priors = [0.1, 0.3, 0.7, 0.9]
+sspo_priors = [0.5]
 sspo_gamma_mins = [round(1255/(1255+17480), 4)] # n_L / (n_L + n_U) # 1255, 17480
 sspo_gamma_0s = [1.0]
 sspo_bases = ["simpo"]  # Add sspo_base options

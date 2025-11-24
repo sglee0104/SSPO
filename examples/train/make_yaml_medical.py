@@ -112,7 +112,7 @@ num_train_epochs = [1]
 lora_ranks = [8]
 
 sspo_gamma_decays = [0.001] #, 0.05, 0.005, 0.001]
-sspo_priors = [0.1, 0.3, 0.7, 0.9, 0.01, 0.09]
+sspo_priors = [0.5]
 sspo_gamma_mins = [round(1093/(1093+20479), 4)] # n_L / (n_L + n_U) # 10935, 20479
 sspo_gamma_0s = [1.0]
 sspo_bases = ["simpo"]  # Add sspo_base options
