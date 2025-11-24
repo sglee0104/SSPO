@@ -132,7 +132,7 @@ lora_ranks = [8]
 
 sspo_gamma_decays = [0.001]
 sspo_priors = [0.1, 0.3, 0.7, 0.9]
-sspo_gamma_mins = [round(5021/(5021+17480), 4)] # n_L / (n_L + n_U) # 5021, 17480
+sspo_gamma_mins = [round(1255/(1255+17480), 4)] # n_L / (n_L + n_U) # 1255, 17480
 sspo_gamma_0s = [1.0]
 sspo_bases = ["simpo"]  # Add sspo_base options
 
